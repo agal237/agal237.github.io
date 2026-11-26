@@ -43,6 +43,23 @@ header .wrap.tools{position:relative}
 .sugg .ct{color:var(--muted);font-size:13px}
 .sugg .emo{width:42px;height:42px;border-radius:8px;background:var(--sand);display:grid;place-items:center;font-size:20px;flex:none}
 .card.flash{box-shadow:0 0 0 3px var(--gold)}
+.zoomhint{position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.85);color:#1d1a16;display:grid;place-items:center;font-size:16px}
+.pics{cursor:pointer}
+#zoom{position:fixed;inset:0;z-index:200;background:#14110f;display:none;flex-direction:column;color:#fff;touch-action:pan-y}
+#zoom.on{display:flex}
+#zoom .zt{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;gap:10px}
+#zoom .zt b{font-size:14px;opacity:.8}
+#zoom .zx{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;font-size:26px;line-height:1;border:0}
+#zoom .zi{flex:1;position:relative;display:flex;align-items:center;justify-content:center;min-height:0}
+#zoom .zi img{max-width:100%;max-height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
+#zoom .za{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:24px;border:0}
+#zoom .za.l{left:10px} #zoom .za.r{right:10px}
+#zoom .zd{display:flex;justify-content:center;gap:6px;padding:10px}
+#zoom .zd i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.35)} #zoom .zd i.on{background:#fff}
+#zoom .zb{padding:4px 18px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px}
+#zoom .zb h4{font-size:18px;margin:0;font-family:inherit}
+#zoom .zb .zp{color:#e9c46a;font-weight:600}
+#zoom .zb button.add{margin-top:0;font-size:16px!important;padding:14px!important;background:var(--terra);color:#fff;border:0;border-radius:14px;padding:14px;font-size:16px;font-weight:600}
 .noresult{grid-column:1/-1;text-align:center;color:var(--muted);padding:30px 10px}
 .logo{font-family:Fraunces,serif;font-size:24px;font-weight:700;letter-spacing:-.5px}
 .logo span{color:var(--terra)}
@@ -244,6 +261,12 @@ input.bad{border-color:var(--terra);box-shadow:0 0 0 3px rgba(196,81,43,.2)}
   <div class="drawer-head"><h2 id="drawerTitle">Votre panier</h2><button class="close" onclick="closeCart()" aria-label="Fermer">×</button></div>
   <div class="drawer-body" id="cartBody"></div>
 </aside>
+<div id="zoom" aria-modal="true" role="dialog">
+  <div class="zt"><b id="zc"></b><button class="zx" onclick="closeZoom()" aria-label="Fermer">×</button></div>
+  <div class="zi" id="zimgbox"><button class="za l" onclick="zStep(-1)" aria-label="Précédente">‹</button><img id="zimg" alt=""><button class="za r" onclick="zStep(1)" aria-label="Suivante">›</button></div>
+  <div class="zd" id="zdots"></div>
+  <div class="zb"><h4 id="zn"></h4><div class="zp" id="zpr"></div><button class="add" onclick="zAdd()">Ajouter au panier</button></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -453,8 +476,8 @@ function renderGrid(){
   document.getElementById("grid").innerHTML = list.map(p=>{
     const ims = imgsOf(p), i = (imgIdx[p.id]||0) % ims.length;
     return `<article class="card" id="p${p.id}">
-      <div class="img" onclick="nextImg(${p.id})"><img src="${src(ims[i])}" alt="${p.name}" loading="lazy"${GROUP.includes(ims[i])?' class="fit"':''}>
-        ${p.tag?`<span class="tag">${p.tag}</span>`:""}${ims.length>1?`<span class="pics">${i+1}/${ims.length} ›</span>`:""}</div>
+      <div class="img" onclick="openZoom(${p.id})"><img src="${src(ims[i])}" alt="${p.name}" loading="lazy"${GROUP.includes(ims[i])?' class="fit"':''}>
+        ${p.tag?`<span class="tag">${p.tag}</span>`:""}<span class="zoomhint">⤢</span>${ims.length>1?`<span class="pics" onclick="event.stopPropagation();nextImg(${p.id})">${i+1}/${ims.length} ›</span>`:""}</div>
       <div class="body">
         <h3>${p.name}</h3>
         <div class="price ${p.price?"":"ask"}">${priceTxt(p)}</div>
@@ -662,6 +685,28 @@ document.getElementById("footer").innerHTML = `© ${new Date().getFullYear()} ${
 document.title = SHOP.name + " — Boutique en ligne";
 document.getElementById("logo").innerHTML = SHOP.name + "<span>.</span>";
 renderFilters(); renderGrid(); updateBadge();
+
+/* ---- Vue agrandie ---- */
+let zId=null,zI=0,zX=null;
+function zRender(){ const p=PRODUCTS.find(x=>x.id===zId), ims=imgsOf(p); zI=(zI+ims.length)%ims.length;
+  document.getElementById("zimg").src=src(ims[zI]); document.getElementById("zimg").alt=p.name;
+  document.getElementById("zn").textContent=p.name+(p.variants?" — "+(colorSel[p.id]||p.variants[0].color):"");
+  document.getElementById("zpr").textContent=priceTxt(p);
+  document.getElementById("zc").textContent=ims.length>1?(zI+1)+" / "+ims.length:"";
+  document.getElementById("zdots").innerHTML=ims.length>1?ims.map((_,k)=>`<i class="${k===zI?"on":""}"></i>`).join(""):"";
+  document.querySelectorAll("#zoom .za").forEach(b=>b.style.display=ims.length>1?"":"none"); }
+function openZoom(id){ zId=id; zI=imgIdx[id]||0; zRender(); document.getElementById("zoom").classList.add("on"); document.body.style.overflow="hidden";
+  try{history.pushState({zoom:1},"")}catch(e){} }
+function hideZoom(){ document.getElementById("zoom").classList.remove("on"); document.body.style.overflow=""; if(zId!==null){imgIdx[zId]=zI; renderGrid();} zId=null; }
+function closeZoom(){ if(history.state&&history.state.zoom){history.back()} else hideZoom(); }
+window.addEventListener("popstate",()=>{ if(zId!==null) hideZoom(); });
+function zStep(d){ zI+=d; zRender(); }
+function zAdd(){ const id=zId; closeZoom(); setTimeout(()=>addToCart(id),50); }
+(function(){ const b=document.getElementById("zimgbox");
+  b.addEventListener("touchstart",e=>{zX=e.touches[0].clientX},{passive:true});
+  b.addEventListener("touchend",e=>{ if(zX===null)return; const dx=e.changedTouches[0].clientX-zX; zX=null; if(Math.abs(dx)>45) zStep(dx<0?1:-1); });
+  document.addEventListener("keydown",e=>{ if(zId===null)return; if(e.key==="Escape")closeZoom(); if(e.key==="ArrowRight")zStep(1); if(e.key==="ArrowLeft")zStep(-1); });
+})();
 </script>
 </body>
 </html>
